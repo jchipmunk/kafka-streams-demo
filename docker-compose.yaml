@@ -1,0 +1,85 @@
+version: '2.2'
+name: 'kafka-streams-demo'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.3
+    cpus: 0.2
+    mem_limit: 512m
+    mem_reservation: 512m
+    ports:
+      - 2181:2181
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=2181
+
+  kafka:
+    image: confluentinc/cp-server:7.5.3
+    cpus: 0.5
+    mem_limit: 1024m
+    mem_reservation: 768m
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092:29092
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT
+      - KAFKA_ADVERTISED_LISTENERS=EXTERNAL://localhost:29092,INTERNAL://kafka:9092
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_HEAP_OPTS=-Xms256m -Xmx512m
+      - KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      - KAFKA_METRIC_REPORTERS=io.confluent.metrics.reporter.ConfluentMetricsReporter
+      - CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS=kafka:9092
+      - CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS=1
+      - CONFLUENT_METRICS_ENABLE=true
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.3
+    cpus: 0.2
+    mem_limit: 512m
+    mem_reservation: 512m
+    depends_on:
+      - kafka
+    ports:
+      - 8081:8081
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+
+  kafka-streams-demo:
+    build:
+      dockerfile: ./docker/Dockerfile
+      context: .
+    cpus: 0.5
+    mem_limit: 1024m
+    mem_reservation: 768m
+    ports:
+      - 1505:1505
+    depends_on:
+      - kafka
+      - schema-registry
+    environment:
+      - HEAP_OPTS=-Xms256m -Xmx512m
+      - JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:1505
+      - DEBUG=true
+    volumes:
+      - ./docker/config:/app/config
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    cpus: 0.5
+    mem_limit: 768m
+    mem_reservation: 768m
+    ports:
+      - 8080:8080
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
